@@ -1,4 +1,4 @@
-// ==================== Wait for DOM to Load ====================
+ // ==================== Wait for DOM to Load ====================
 document.addEventListener('DOMContentLoaded', function() {
     
     // ==================== Loading Animation ====================
@@ -15,15 +15,45 @@ document.addEventListener('DOMContentLoaded', function() {
     const hamburger = document.getElementById('hamburger');
     const navMenu = document.getElementById('navMenu');
     const navLinks = document.querySelectorAll('.nav-link');
+    const scrollTopBtn = document.getElementById('scrollTop');
 
-    // Sticky navbar on scroll
-    window.addEventListener('scroll', function() {
-        if (window.scrollY > 50) {
-            navbar.classList.add('scrolled');
-        } else {
-            navbar.classList.remove('scrolled');
+    // Low-performance detection (used to reduce animations)
+    const isLowPerf = (navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) || window.innerWidth < 900;
+    if (isLowPerf) document.body.classList.add('low-perf');
+
+    // Optimized scroll handling: use a single passive scroll listener + rAF
+    let lastScrollY = window.scrollY || 0;
+    let scrollTicking = false;
+    const heroImages = document.querySelectorAll('.hero-image');
+
+    function updateOnScroll() {
+        // navbar scrolled class
+        navbar.classList.toggle('scrolled', lastScrollY > 50);
+
+        // parallax for hero images (use transform for GPU acceleration)
+        const scrolled = lastScrollY;
+        const speed = isLowPerf ? 0.12 : 0.25; // reduce on low perf
+        heroImages.forEach(element => {
+            element.style.transform = `translate3d(0, ${scrolled * speed}px, 0)`;
+            element.style.willChange = 'transform';
+        });
+
+        // scrollTop button visibility
+        if (scrollTopBtn) {
+            scrollTopBtn.classList.toggle('show', lastScrollY > 500);
         }
-    });
+    }
+
+    window.addEventListener('scroll', function() {
+        lastScrollY = window.scrollY || window.pageYOffset;
+        if (!scrollTicking) {
+            scrollTicking = true;
+            requestAnimationFrame(function() {
+                updateOnScroll();
+                scrollTicking = false;
+            });
+        }
+    }, { passive: true });
 
     // Mobile menu toggle
     hamburger.addEventListener('click', function() {
@@ -39,27 +69,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Active link on scroll
-    window.addEventListener('scroll', function() {
-        let current = '';
-        const sections = document.querySelectorAll('section');
-
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop;
-            const sectionHeight = section.clientHeight;
-            
-            if (window.pageYOffset >= sectionTop - 100) {
-                current = section.getAttribute('id');
+    // Active nav link using IntersectionObserver for better performance
+    const sectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const id = entry.target.getAttribute('id');
+            const link = document.querySelector(`.nav-menu a[href="#${id}"]`);
+            if (link) {
+                if (entry.isIntersecting) {
+                    navLinks.forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                }
             }
         });
+    }, { root: null, threshold: 0.5 });
 
-        navLinks.forEach(link => {
-            link.classList.remove('active');
-            if (link.getAttribute('href').slice(1) === current) {
-                link.classList.add('active');
-            }
-        });
-    });
+    document.querySelectorAll('section[id]').forEach(section => sectionObserver.observe(section));
 
     // ==================== Theme Toggle ====================
     const themeToggle = document.getElementById('themeToggle');
@@ -87,6 +111,79 @@ document.addEventListener('DOMContentLoaded', function() {
             themeIcon.classList.remove('fa-sun');
             themeIcon.classList.add('fa-moon');
             localStorage.setItem('theme', 'dark');
+        }
+    });
+
+    // ==================== Audio Control (IMPROVED) ====================
+    const audioToggle = document.getElementById('audioToggle');
+    const backgroundAudio = document.getElementById('backgroundAudio');
+    const audioIcon = audioToggle.querySelector('i');
+
+    // Check for saved audio preference
+    const audioEnabled = localStorage.getItem('audioEnabled') !== 'false';
+
+    // Function to attempt audio playback
+    function tryPlayAudio() {
+        if (audioEnabled && backgroundAudio) {
+            // Set volume to ensure it's not muted
+            backgroundAudio.volume = 0.5;
+            backgroundAudio.muted = false;
+            
+            const playPromise = backgroundAudio.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log('✅ Audio playing successfully');
+                    audioToggle.classList.remove('muted');
+                }).catch((error) => {
+                    console.log('⚠️ Autoplay prevented by browser. Click anywhere to enable audio.', error);
+                    audioToggle.classList.add('muted');
+                    
+                    // Try to play on first user interaction
+                    const enableAudioOnInteraction = function() {
+                        backgroundAudio.play().then(() => {
+                            audioToggle.classList.remove('muted');
+                            console.log('✅ Audio started after user interaction');
+                        }).catch(err => console.log('Audio play failed:', err));
+                        
+                        // Remove listeners after first interaction
+                        document.removeEventListener('click', enableAudioOnInteraction);
+                        document.removeEventListener('touchstart', enableAudioOnInteraction);
+                        document.removeEventListener('keydown', enableAudioOnInteraction);
+                    };
+                    
+                    document.addEventListener('click', enableAudioOnInteraction, { once: true });
+                    document.addEventListener('touchstart', enableAudioOnInteraction, { once: true });
+                    document.addEventListener('keydown', enableAudioOnInteraction, { once: true });
+                });
+            }
+        } else {
+            audioToggle.classList.add('muted');
+        }
+    }
+
+    // Try to play audio immediately when DOM is ready
+    tryPlayAudio();
+
+    // Also try when window fully loads
+    window.addEventListener('load', function() {
+        if (backgroundAudio && backgroundAudio.paused && audioEnabled) {
+            tryPlayAudio();
+        }
+    });
+
+    // Audio toggle button functionality
+    audioToggle.addEventListener('click', function() {
+        if (backgroundAudio.paused) {
+            backgroundAudio.play().catch(function(error) {
+                console.log('Audio play error:', error);
+            });
+            audioToggle.classList.remove('muted');
+            localStorage.setItem('audioEnabled', 'true');
+        } else {
+            backgroundAudio.pause();
+            audioToggle.classList.add('muted');
+            localStorage.setItem('audioEnabled', 'false');
         }
     });
 
@@ -150,11 +247,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initial check on page load
-    revealOnScroll();
-
-    // Check on scroll
-    window.addEventListener('scroll', revealOnScroll);
+    // Initial check on page load (replaced by IntersectionObserver below)
+    // revealOnScroll(); -- handled by IntersectionObserver
 
     // ==================== Project Filtering ====================
     const filterButtons = document.querySelectorAll('.filter-btn');
@@ -209,22 +303,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ==================== Scroll to Top Button ====================
-    const scrollTopBtn = document.getElementById('scrollTop');
-
-    window.addEventListener('scroll', function() {
-        if (window.pageYOffset > 500) {
-            scrollTopBtn.classList.add('show');
-        } else {
-            scrollTopBtn.classList.remove('show');
-        }
-    });
-
-    scrollTopBtn.addEventListener('click', function() {
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth'
+    // scrollTop visibility handled by optimized scroll handler
+    if (scrollTopBtn) {
+        scrollTopBtn.addEventListener('click', function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
         });
-    });
+    }
 
     // ==================== Contact Form ====================
     const contactForm = document.getElementById('contactForm');
@@ -353,38 +440,34 @@ document.addEventListener('DOMContentLoaded', function() {
     document.head.appendChild(style);
 
     // ==================== Parallax Effect ====================
-    window.addEventListener('scroll', function() {
-        const scrolled = window.pageYOffset;
-        const parallaxElements = document.querySelectorAll('.hero-image');
-        
-        parallaxElements.forEach(element => {
-            const speed = 0.3;
-            element.style.transform = `translateY(${scrolled * speed}px)`;
-        });
-    });
+    // Parallax is handled in the consolidated scroll rAF handler for better performance.
 
     // ==================== Card Tilt Effect ====================
     const cards = document.querySelectorAll('.glass-card');
 
-    cards.forEach(card => {
-        card.addEventListener('mousemove', function(e) {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+    if (!isLowPerf) {
+        cards.forEach(card => {
+            let rafId = null;
+            card.addEventListener('mousemove', function(e) {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
 
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(() => {
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const rotateX = (y - centerY) / 20;
+                    const rotateY = (centerX - x) / 20;
+                    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+                });
+            });
 
-            const rotateX = (y - centerY) / 20;
-            const rotateY = (centerX - x) / 20;
-
-            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+            card.addEventListener('mouseleave', function() {
+                card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)';
+            });
         });
-
-        card.addEventListener('mouseleave', function() {
-            card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)';
-        });
-    });
+    }
 
     // ==================== Dynamic Year in Footer ====================
     const yearElement = document.querySelector('.footer-content p');
@@ -629,4 +712,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ==================== Initialize Complete ====================
     console.log('✅ Portfolio initialized successfully!');
+
+    // Background canvas animation removed — restoring to audio-only background state.
 });

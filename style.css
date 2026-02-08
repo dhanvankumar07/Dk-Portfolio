@@ -100,6 +100,18 @@ body::before {
     animation: gradientShift 15s ease infinite;
 }
 
+/* Ensure main content sits above background visuals */
+main, header, nav, section, .loader-wrapper {
+    position: relative;
+    z-index: 0;
+}
+
+/* Ensure main content sits above background visuals */
+main, header, nav, section, .loader-wrapper {
+    position: relative;
+    z-index: 0;
+}
+
 @keyframes gradientShift {
     0%, 100% {
         transform: translateY(0) scale(1);
@@ -117,7 +129,7 @@ body::after {
     right: -50%;
     width: 200%;
     height: 200%;
-    background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 50%);
+    background: radial-gradient(circle, rgba(44, 30, 79, 0.5) 0%, transparent 50%);
     animation: rotate 30s linear infinite;
     z-index: -1;
     pointer-events: none;
@@ -259,6 +271,31 @@ body::after {
     display: flex;
     align-items: center;
     gap: 1rem;
+}
+
+.audio-toggle {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.audio-toggle:hover {
+    background: var(--glass-border);
+    transform: scale(1.05);
+}
+
+.audio-toggle.muted {
+    color: var(--text-muted);
+    opacity: 0.6;
 }
 
 .theme-toggle {
